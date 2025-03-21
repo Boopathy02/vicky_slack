@@ -1,4 +1,4 @@
-name: Slack Notification on Success or Failure
+name: Slack and Gmail Notification on Success or Failure
 
 on:
   push:
@@ -37,3 +37,41 @@ jobs:
           curl -X POST -H 'Content-type: application/json' --data "{
             \"text\": \"Task Status: $STATUS\n$MESSAGE\"
           }" $SLACK_WEBHOOK_URL
+
+      - name: Send Gmail Notification
+        if: always()  # This ensures the step runs regardless of previous step success or failure
+        env:
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_PASS: ${{ secrets.GMAIL_PASS }}
+        run: |
+          echo "Sending email notification..."
+          npm install nodemailer
+          node -e "
+          const nodemailer = require('nodemailer');
+
+          const transporter = nodemailer.createTransport({
+            service: 'gmail',
+            auth: {
+              user: process.env.GMAIL_USER,
+              pass: process.env.GMAIL_PASS,
+            },
+          });
+
+          const status = '${{ steps.task.outcome }}';
+          const message = status === 'success' ? 'The task completed successfully!' : 'The task failed!';
+
+          const mailOptions = {
+            from: process.env.GMAIL_USER,
+            to: 'recipient@example.com',  # Change this to the recipient's email address
+            subject: 'GitHub Actions Notification',
+            text: \`Task Status: \${status}\n\${message}\`,
+          };
+
+          transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+              console.log('Error:', error);
+            } else {
+              console.log('Email sent:', info.response);
+            }
+          });
+          "
