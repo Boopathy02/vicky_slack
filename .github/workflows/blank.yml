@@ -1,0 +1,39 @@
+name: Slack Notification on Success or Failure
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Run a simple task
+        id: task
+        run: |
+          echo "Running a simple task..."
+          # Simulate a task; replace with your actual command
+          # Uncomment the next line to simulate failure
+          # exit 1
+
+      - name: Send Slack Notification
+        if: always()  # This ensures the step runs regardless of previous step success or failure
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ "${{ steps.task.outcome }}" == "success" ]; then
+            STATUS="success"
+            MESSAGE="The task completed successfully!"
+          else
+            STATUS="failure"
+            MESSAGE="The task failed!"
+          fi
+
+          curl -X POST -H 'Content-type: application/json' --data "{
+            \"text\": \"Task Status: $STATUS\n$MESSAGE\"
+          }" $SLACK_WEBHOOK_URL
