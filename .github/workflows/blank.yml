@@ -1,4 +1,4 @@
-name: Echo Success or Failure Notification with Slack
+name: Slack Notification on Success or Failure
 
 on:
   push:
@@ -10,28 +10,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v2
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-    - name: Run echo success or failure
-      id: echo_result
-      run: |
-        echo "Running a task..."
-        # Simulate a task. Change the exit code to simulate success or failure.
-        # Uncomment one of the following lines to simulate success or failure.
-        # exit 0 # Success
-        exit 1 # Failure
+      - name: Run a simple task
+        id: task
+        run: |
+          echo "Running a simple task..."
+          # Simulate a task; replace with your actual command
+          # Uncomment the next line to simulate failure
+          # exit 1
 
-    - name: Send success notification to Slack
-      if: success()
-      run: |
-        curl -X POST -H 'Content-type: application/json' \
-        --data '{"text":"Task succeeded in GitHub Actions!"}' \
-        ${{ secrets.SLACK_WEBHOOK_URL }}
+      - name: Send Slack Notification
+        if: always()  # This ensures the step runs regardless of previous step success or failure
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ "${{ steps.task.outcome }}" == "success" ]; then
+            STATUS="success"
+            MESSAGE="The task completed successfully!"
+          else
+            STATUS="failure"
+            MESSAGE="The task failed!"
+          fi
 
-    - name: Send failure notification to Slack
-      if: failure()
-      run: |
-        curl -X POST -H 'Content-type: application/json' \
-        --data '{"text":"Task failed in GitHub Actions!"}' \
-        ${{ secrets.SLACK_WEBHOOK_URL }}
+          curl -X POST -H 'Content-type: application/json' --data "{
+            \"text\": \"Task Status: $STATUS\n$MESSAGE\"
+          }" $SLACK_WEBHOOK_URL
