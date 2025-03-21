@@ -62,7 +62,7 @@ jobs:
 
           const mailOptions = {
             from: process.env.GMAIL_USER,
-            to: 'recipient@example.com',  # Change this to the recipient's email address
+            to: 'recipient@example.com',  // Change this to the recipient's email address
             subject: 'GitHub Actions Notification',
             text: \`Task Status: \${status}\n\${message}\`,
           };
