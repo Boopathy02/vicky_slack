@@ -1,81 +1,62 @@
-name: Slack and Gmail Notification on Success or Failure
+name: Terraform Deploy and PR
 
 on:
   push:
     branches:
-      - main
-  pull_request:
-    branches:
-      - main
+      - slack  # Trigger this workflow only when pushing to the `slack` branch
 
 jobs:
-  notify:
+  deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
-      - name: Run a simple task
-        id: task
-        run: |
-          echo "Running a simple task..."
-          # Simulate a task; replace with your actual command
-          # Uncomment the next line to simulate failure
-          # exit 1
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v1
 
+      - name: Install dependencies
+        run: |
+          terraform init
+
+      - name: Apply Terraform
+        id: terraform_apply
+        run: |
+          terraform apply -auto-approve
+          
       - name: Send Slack Notification
-        if: always()  # This ensures the step runs regardless of previous step success or failure
+        if: always()
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
         run: |
-          if [ "${{ steps.task.outcome }}" == "success" ]; then
+          if [ "${{ steps.terraform_apply.outcome }}" == "success" ]; then
             STATUS="success"
-            MESSAGE="The task completed successfully!"
+            MESSAGE="Terraform deployment completed successfully!"
           else
             STATUS="failure"
-            MESSAGE="The task failed!"
+            MESSAGE="Terraform deployment failed!"
           fi
-
           curl -X POST -H 'Content-type: application/json' --data "{
             \"text\": \"Task Status: $STATUS\n$MESSAGE\"
           }" $SLACK_WEBHOOK_URL
 
-      - name: Send Gmail Notification
-        if: always()  # This ensures the step runs regardless of previous step success or failure
-        env:
-          GMAIL_USER: ${{ secrets.GMAIL_USER }}
-          GMAIL_PASS: ${{ secrets.GMAIL_PASS }}
+      # Step to install GitHub CLI
+      - name: Install GitHub CLI
         run: |
-          echo "Sending email notification..."
-          npm install nodemailer
-          node -e "
-          const nodemailer = require('nodemailer');
+          sudo apt update
+          sudo apt install gh
 
-          const transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-              user: process.env.GMAIL_USER,
-              pass: process.env.GMAIL_PASS,
-            },
-          });
+      # Step to authenticate GitHub CLI
+      - name: Authenticate GitHub CLI
+        run: |
+          echo "${{ secrets.GH_TOKEN }}" | gh auth login --with-token
 
-          const status = '${{ steps.task.outcome }}';
-          const message = status === 'success' ? 'The task completed successfully!' : 'The task failed!';
-
-          const mailOptions = {
-            from: process.env.GMAIL_USER,
-            to: 'recipient@example.com',  // Change this to the recipient's email address
-            subject: 'GitHub Actions Notification',
-            text: \`Task Status: \${status}\n\${message}\`,
-          };
-
-          transporter.sendMail(mailOptions, (error, info) => {
-            if (error) {
-              console.log('Error:', error);
-            } else {
-              console.log('Email sent:', info.response);
-            }
-          });
-          "
+      # Step to create Pull Request to Main Branch if Terraform Apply is successful
+      - name: Create Pull Request to Main Branch
+        if: success()  # This step will run only if the previous steps succeeded
+        run: |
+          PR_TITLE="Automated PR: Terraform Deployment"
+          PR_BODY="This pull request merges the latest changes from the slack branch after a successful Terraform deployment."
+          gh pr create --title "$PR_TITLE" --body "$PR_BODY" --base main --head slack
 
